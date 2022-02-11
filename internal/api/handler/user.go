@@ -28,7 +28,7 @@ type (
 		ID uint `uri:"id"`
 	}
 
-	crateUserResponse struct {
+	response struct {
 		ID    uint   `json:"id"`
 		Name  string `json:"name"`
 		Email string `json:"email"`
@@ -58,7 +58,7 @@ func (h UserHandler) CreateUser(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, crateUserResponse{
+	ctx.JSON(http.StatusCreated, response{
 		ID:    u.ID,
 		Name:  u.Name,
 		Email: u.Email,
@@ -83,7 +83,7 @@ func (h UserHandler) GetUser(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, crateUserResponse{
+	ctx.JSON(http.StatusCreated, response{
 		ID:    u.ID,
 		Name:  u.Name,
 		Email: u.Email,
