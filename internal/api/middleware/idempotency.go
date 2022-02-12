@@ -17,10 +17,10 @@ type (
 		Set(key interface{}, data cache.Data) error
 	}
 
-	IntentFn func(r *http.Request) interface{}
+	KeyFn func(r *http.Request) interface{}
 )
 
-func DefaultIntent(r *http.Request) interface{} {
+func DefaultKeyFn(r *http.Request) interface{} {
 	return struct {
 		Key string
 		URL string
@@ -30,7 +30,7 @@ func DefaultIntent(r *http.Request) interface{} {
 	}
 }
 
-func Idempotency(handler Cache, intentFn IntentFn) gin.HandlerFunc {
+func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if !isSomeHTTPMethod(ctx.Request, http.MethodPost) {
 			return
@@ -57,12 +57,6 @@ func Idempotency(handler Cache, intentFn IntentFn) gin.HandlerFunc {
 	}
 }
 
-func writeResponseAndAbort(ctx *gin.Context, data cache.Data) {
-	data.WriteHeaders(ctx.Writer)
-	ctx.Data(data.StatusCode, data.ContentType, data.Body)
-	ctx.Abort()
-}
-
 func isSomeHTTPMethod(r *http.Request, methods ...string) bool {
 	for _, method := range methods {
 		if r.Method == method {
@@ -75,6 +69,12 @@ func isSomeHTTPMethod(r *http.Request, methods ...string) bool {
 
 func hasIdempotencyHeader(r *http.Request) bool {
 	return r.Header.Get(idempotencyIDKey) != ""
+}
+
+func writeResponseAndAbort(ctx *gin.Context, data cache.Data) {
+	data.WriteHeaders(ctx.Writer)
+	ctx.Data(data.StatusCode, data.ContentType, data.Body)
+	ctx.Abort()
 }
 
 func isSuccessStatusCode(statusCode int) bool {
