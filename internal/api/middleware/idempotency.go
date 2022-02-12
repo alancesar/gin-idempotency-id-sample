@@ -7,50 +7,76 @@ import (
 	"net/http"
 )
 
-type (
-	Cache interface {
-		Get(idempotencyID, url string) (cache.Data, error)
-		Set(idempotencyID, url string, data cache.Data) error
-	}
+const (
+	idempotencyIDKey = "Idempotency-Id"
 )
 
-func Idempotency(handler Cache) gin.HandlerFunc {
+type (
+	Cache interface {
+		Get(key interface{}) (cache.Data, error)
+		Set(key interface{}, data cache.Data) error
+	}
+
+	IntentFn func(r *http.Request) interface{}
+)
+
+func DefaultIntent(r *http.Request) interface{} {
+	return struct {
+		Key string
+		URL string
+	}{
+		Key: r.Header.Get(idempotencyIDKey),
+		URL: r.RequestURI,
+	}
+}
+
+func Idempotency(handler Cache, intentFn IntentFn) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if ctx.Request.Method != http.MethodPost {
+		if !isSomeHTTPMethod(ctx.Request, http.MethodPost) {
 			return
 		}
 
-		idempotencyID := ctx.Request.Header.Get("Idempotency-Id")
-		if idempotencyID == "" {
+		if !hasIdempotencyHeader(ctx.Request) {
 			return
 		}
 
 		w := writter.NewWriter(ctx.Writer)
-		if data, err := handler.Get(idempotencyID, ctx.Request.RequestURI); err != nil {
+		key := intentFn(ctx.Request)
+		if data, err := handler.Get(key); err != nil {
 			ctx.Writer = w
 			ctx.Next()
 		} else {
-			writeHeaders(ctx.Writer, data)
-			ctx.Data(data.StatusCode, data.ContentType, data.Body)
-			ctx.Abort()
+			writeResponseAndAbort(ctx, data)
 			return
 		}
 
-		statusCode := ctx.Writer.Status()
-		if statusCode >= http.StatusOK && statusCode < http.StatusBadRequest {
-			_ = handler.Set(idempotencyID, ctx.Request.RequestURI,
-				cache.Data{
-					StatusCode:  statusCode,
-					ContentType: ctx.ContentType(),
-					Headers:     ctx.Writer.Header().Clone(),
-					Body:        w.Body.Bytes(),
-				})
+		if isSuccessStatusCode(ctx.Writer.Status()) {
+			data := w.ToData(ctx.ContentType())
+			_ = handler.Set(key, data)
 		}
 	}
 }
 
-func writeHeaders(writer http.ResponseWriter, data cache.Data) {
-	for k, v := range data.Headers {
-		writer.Header().Set(k, v[0])
+func writeResponseAndAbort(ctx *gin.Context, data cache.Data) {
+	data.WriteHeaders(ctx.Writer)
+	ctx.Data(data.StatusCode, data.ContentType, data.Body)
+	ctx.Abort()
+}
+
+func isSomeHTTPMethod(r *http.Request, methods ...string) bool {
+	for _, method := range methods {
+		if r.Method == method {
+			return true
+		}
 	}
+
+	return false
+}
+
+func hasIdempotencyHeader(r *http.Request) bool {
+	return r.Header.Get(idempotencyIDKey) != ""
+}
+
+func isSuccessStatusCode(statusCode int) bool {
+	return statusCode >= http.StatusOK && statusCode < http.StatusBadRequest
 }

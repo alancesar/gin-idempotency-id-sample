@@ -19,15 +19,17 @@ type (
 		StatusCode  int
 	}
 
-	key struct {
-		IdempotencyID, URL string
-	}
-
 	Provider interface {
 		Get(key interface{}) (interface{}, error)
 		Set(key, value interface{}, ttl time.Duration) error
 	}
 )
+
+func (d Data) WriteHeaders(writer http.ResponseWriter) {
+	for k, v := range d.Headers {
+		writer.Header().Set(k, v[0])
+	}
+}
 
 func NewIdempotencyCache(cache Provider, ttl time.Duration) *IdempotencyCache {
 	return &IdempotencyCache{
@@ -36,24 +38,16 @@ func NewIdempotencyCache(cache Provider, ttl time.Duration) *IdempotencyCache {
 	}
 }
 
-func (c IdempotencyCache) Set(idempotencyID, url string, data Data) error {
+func (c IdempotencyCache) Set(key interface{}, data Data) error {
 	body, err := json.Marshal(&data)
 	if err != nil {
 		return err
 	}
 
-	key := key{
-		IdempotencyID: idempotencyID,
-		URL:           url,
-	}
 	return c.provider.Set(key, body, c.ttl)
 }
 
-func (c IdempotencyCache) Get(idempotencyID, url string) (Data, error) {
-	key := key{
-		IdempotencyID: idempotencyID,
-		URL:           url,
-	}
+func (c IdempotencyCache) Get(key interface{}) (Data, error) {
 	data, err := c.provider.Get(key)
 	if err != nil {
 		return Data{}, err

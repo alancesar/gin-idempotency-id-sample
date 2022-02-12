@@ -29,7 +29,7 @@ func main() {
 	c := cache.NewIdempotencyCache(p, defaultTTL)
 
 	engine := gin.Default()
-	engine.Use(middleware.Idempotency(c))
+	engine.Use(middleware.Tracing, middleware.Idempotency(c, middleware.DefaultIntent))
 	engine.GET("/user/:id", h.GetUser)
 	engine.POST("/user", h.CreateUser)
 
