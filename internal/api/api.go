@@ -5,14 +5,14 @@ import (
 )
 
 type Server interface {
-	Run(port ...string) error
+	Run(addr ...string) error
 }
 
-func StartServer(ctx context.Context, server Server) error {
+func StartServer(ctx context.Context, server Server, addr ...string) error {
 	errChan := make(chan error)
 
 	go func() {
-		if err := server.Run(":8099"); err != nil {
+		if err := server.Run(addr...); err != nil {
 			errChan <- err
 		}
 	}()

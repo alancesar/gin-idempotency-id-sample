@@ -43,7 +43,7 @@ func main() {
 		cancel()
 	}()
 
-	if err := api.StartServer(ctx, engine); err != nil {
+	if err := api.StartServer(ctx, engine, ":8080"); err != nil {
 		log.Fatalln(err)
 	}
 }
