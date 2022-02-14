@@ -2,8 +2,17 @@ package cache
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
+)
+
+const (
+	lockKey = "LOCK"
+)
+
+var (
+	ErrAlreadyLocked = errors.New("already locked")
 )
 
 type (
@@ -22,6 +31,12 @@ type (
 	Provider interface {
 		Get(key interface{}) (interface{}, error)
 		Set(key, value interface{}, ttl time.Duration) error
+		Delete(key interface{}) error
+	}
+
+	lockerKey struct {
+		MainKey interface{}
+		LockKey string
 	}
 )
 
@@ -56,4 +71,26 @@ func (c IdempotencyCache) Get(key interface{}) (Data, error) {
 	var output Data
 	err = json.Unmarshal(data.([]uint8), &output)
 	return output, err
+}
+
+func (c IdempotencyCache) Lock(key interface{}) error {
+	lockerKey := lockerKey{
+		MainKey: key,
+		LockKey: lockKey,
+	}
+
+	if _, err := c.provider.Get(lockerKey); err == nil {
+		return ErrAlreadyLocked
+	}
+
+	return c.provider.Set(lockerKey, []byte(lockKey), c.ttl)
+}
+
+func (c IdempotencyCache) Unlock(key interface{}) error {
+	lockerKey := lockerKey{
+		MainKey: key,
+		LockKey: lockKey,
+	}
+
+	return c.provider.Delete(lockerKey)
 }

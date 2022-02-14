@@ -28,3 +28,7 @@ func (b BigCacheProvider) Set(key, value interface{}, ttl time.Duration) error {
 		Expiration: ttl,
 	})
 }
+
+func (b BigCacheProvider) Delete(key interface{}) error {
+	return b.client.Delete(key)
+}

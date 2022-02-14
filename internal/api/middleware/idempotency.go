@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
 	"idempotency/internal/api/writter"
 	"idempotency/internal/cache"
@@ -15,6 +16,8 @@ type (
 	Cache interface {
 		Get(key interface{}) (cache.Data, error)
 		Set(key interface{}, data cache.Data) error
+		Lock(key interface{}) error
+		Unlock(key interface{}) error
 	}
 
 	KeyFn func(r *http.Request) interface{}
@@ -43,6 +46,11 @@ func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 		w := writter.NewWriter(ctx.Writer)
 		key := intentFn(ctx.Request)
 		if data, err := handler.Get(key); err != nil {
+			if err := handler.Lock(key); isLocked(err) {
+				ctx.Status(http.StatusConflict)
+				ctx.Abort()
+				return
+			}
 			ctx.Writer = w
 			ctx.Next()
 		} else {
@@ -54,6 +62,7 @@ func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 			data := w.ToData(ctx.ContentType())
 			_ = handler.Set(key, data)
 		}
+		_ = handler.Unlock(key)
 	}
 }
 
@@ -69,6 +78,10 @@ func isSomeHTTPMethod(r *http.Request, methods ...string) bool {
 
 func hasIdempotencyHeader(r *http.Request) bool {
 	return r.Header.Get(idempotencyIDKey) != ""
+}
+
+func isLocked(err error) bool {
+	return err != nil && errors.Is(err, cache.ErrAlreadyLocked)
 }
 
 func writeResponseAndAbort(ctx *gin.Context, data cache.Data) {
