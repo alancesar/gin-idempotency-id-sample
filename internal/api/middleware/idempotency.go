@@ -33,7 +33,7 @@ func DefaultKeyFn(r *http.Request) interface{} {
 	}
 }
 
-func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
+func Idempotency(cache Cache, intentFn KeyFn) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if !isSomeHTTPMethod(ctx.Request, http.MethodPost) {
 			return
@@ -47,11 +47,11 @@ func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 		key := intentFn(ctx.Request)
 
 		defer func() {
-			_ = handler.Unlock(key)
+			_ = cache.Unlock(key)
 		}()
 
-		if data, err := handler.Get(key); err != nil {
-			if err := handler.Lock(key); isLocked(err) {
+		if data, err := cache.Get(key); err != nil {
+			if err := cache.Lock(key); isLocked(err) {
 				ctx.Status(http.StatusConflict)
 				ctx.Abort()
 				return
@@ -65,7 +65,7 @@ func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 
 		if isSuccessStatusCode(ctx.Writer.Status()) {
 			data := w.ToData(ctx.ContentType())
-			_ = handler.Set(key, data)
+			_ = cache.Set(key, data)
 		}
 	}
 }
