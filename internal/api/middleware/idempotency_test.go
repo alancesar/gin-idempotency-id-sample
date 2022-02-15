@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestDefaultKeyFn(t *testing.T) {
+func TestKeyAndURL(t *testing.T) {
 	type args struct {
 		r *http.Request
 	}
@@ -36,8 +36,8 @@ func TestDefaultKeyFn(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DefaultKeyFn(tt.args.r); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("DefaultKeyFn() = %v, want %v", got, tt.want)
+			if got := KeyAndURL(tt.args.r); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("KeyAndURL() = %v, want %v", got, tt.want)
 			}
 		})
 	}

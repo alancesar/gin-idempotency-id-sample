@@ -20,10 +20,16 @@ type (
 		Unlock(key interface{}) error
 	}
 
-	KeyFn func(r *http.Request) interface{}
+	Opts struct {
+		CacheKeyGenFn   CacheKeyGenFn
+		CacheCriteriaFn CacheCriteriaFn
+	}
+
+	CacheKeyGenFn   func(r *http.Request) interface{}
+	CacheCriteriaFn func(writer gin.ResponseWriter) bool
 )
 
-func DefaultKeyFn(r *http.Request) interface{} {
+func KeyAndURL(r *http.Request) interface{} {
 	return struct {
 		Key string
 		URL string
@@ -33,7 +39,13 @@ func DefaultKeyFn(r *http.Request) interface{} {
 	}
 }
 
-func Idempotency(cache Cache, intentFn KeyFn) gin.HandlerFunc {
+func CacheOnlySuccess(w gin.ResponseWriter) bool {
+	return w.Status() >= http.StatusOK && w.Status() < http.StatusBadRequest
+}
+
+func Idempotency(cache Cache, opts ...Opts) gin.HandlerFunc {
+	keyFn, cacheCriteriaFn := setOpts(opts...)
+
 	return func(ctx *gin.Context) {
 		if !isSomeHTTPMethod(ctx.Request, http.MethodPost) {
 			return
@@ -44,7 +56,7 @@ func Idempotency(cache Cache, intentFn KeyFn) gin.HandlerFunc {
 		}
 
 		w := writter.NewWriter(ctx.Writer)
-		key := intentFn(ctx.Request)
+		key := keyFn(ctx.Request)
 
 		defer func() {
 			_ = cache.Unlock(key)
@@ -63,11 +75,28 @@ func Idempotency(cache Cache, intentFn KeyFn) gin.HandlerFunc {
 			return
 		}
 
-		if isSuccessStatusCode(ctx.Writer.Status()) {
+		if cacheCriteriaFn(ctx.Writer) {
 			data := w.ToData(ctx.ContentType())
 			_ = cache.Set(key, data)
 		}
 	}
+}
+
+func setOpts(opts ...Opts) (CacheKeyGenFn, CacheCriteriaFn) {
+	keyFn := KeyAndURL
+	cacheCriteriaFn := CacheOnlySuccess
+
+	for _, opt := range opts {
+		if opt.CacheKeyGenFn != nil {
+			keyFn = opt.CacheKeyGenFn
+		}
+
+		if opt.CacheCriteriaFn != nil {
+			cacheCriteriaFn = opt.CacheCriteriaFn
+		}
+	}
+
+	return keyFn, cacheCriteriaFn
 }
 
 func isSomeHTTPMethod(r *http.Request, methods ...string) bool {
@@ -92,8 +121,4 @@ func writeResponseAndAbort(ctx *gin.Context, data cache.Data) {
 	data.WriteHeaders(ctx.Writer)
 	ctx.Data(data.StatusCode, data.ContentType, data.Body)
 	ctx.Abort()
-}
-
-func isSuccessStatusCode(statusCode int) bool {
-	return statusCode >= http.StatusOK && statusCode < http.StatusBadRequest
 }
