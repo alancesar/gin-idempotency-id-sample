@@ -45,6 +45,11 @@ func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 
 		w := writter.NewWriter(ctx.Writer)
 		key := intentFn(ctx.Request)
+
+		defer func() {
+			_ = handler.Unlock(key)
+		}()
+
 		if data, err := handler.Get(key); err != nil {
 			if err := handler.Lock(key); isLocked(err) {
 				ctx.Status(http.StatusConflict)
@@ -62,7 +67,6 @@ func Idempotency(handler Cache, intentFn KeyFn) gin.HandlerFunc {
 			data := w.ToData(ctx.ContentType())
 			_ = handler.Set(key, data)
 		}
-		_ = handler.Unlock(key)
 	}
 }
 
